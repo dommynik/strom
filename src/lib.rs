@@ -1,189 +1,68 @@
-#[derive(Debug, Clone, Copy)]
-pub struct Input<'a> {
-    pub pos: usize,
-    pub src: &'a str,
+#[macro_use] pub mod macros;
+
+
+pub fn is_lowercase(chr: char) -> bool {
+    chr >= 'a' && chr <= 'z'
 }
 
-impl<'a> Input<'a> {
-    pub fn new(pos: usize, src: &'a str) -> Input<'a> {
-        Input { pos: pos, src: src }
-    }
+pub fn is_uppercase(chr: char) -> bool {
+    chr >= 'A' && chr <= 'Z'
 }
 
-#[derive(Debug)]
+pub fn is_digit(chr: char) -> bool {
+    chr >= '0' && chr <= '9'
+}
+
+pub fn is_alpha(chr: char) -> bool {
+    is_lowercase(chr) || is_uppercase(chr)
+}
+
+pub fn is_alphanumeric(chr: char) -> bool {
+    is_alpha(chr) || is_digit(chr)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output<'a, T> {
-    pub pos: usize,
-    pub src: &'a str,
-    pub hit: T,
+    pub src: Source<'a>,
+    pub mat: Result<Match<T>, String>
 }
 
 impl<'a, T> Output<'a, T> {
-    pub fn new(pos: usize, src: &'a str, hit: T) -> Output<'a, T> {
-        Output { pos: pos, src: src, hit: hit }
+    pub fn ok(src: Source<'a>, mat: Match<T>) -> Output<'a, T> {
+        Output { src: src, mat: Ok(mat) }
+    }
+
+    pub fn err(src: Source<'a>, err: String) -> Output<'a, T> {
+        Output { src: src, mat: Err(err) }
     }
 }
 
-#[macro_export]
-macro_rules! tag {
-    ($i:expr, $pattern:expr) => (
-        if $i.src.starts_with($pattern) {
-            let (hit, src) = $i.src.split_at($pattern.len());
-            Some($crate::Output::new($i.pos, src, hit))
-        } else {
-            None
-        }
-    );
-
-    ($i:expr, cl $pattern:expr) => (
-        if $i.src.len() < $pattern.len() {
-            None
-        } else {
-            let cl_src = $i.src[0..$pattern.len()].to_lowercase();
-            let cl_pat = $pattern.to_lowercase();
-
-            if cl_src == cl_pat {
-                let (hit, src) = $i.src.split_at($pattern.len());
-                Some($crate::Output::new($i.pos, src, hit))
-            } else {
-                None
-            }
-        }
-    );
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Source<'a> {
+    pub src: &'a str,
+    pub pos: usize,
 }
 
-#[macro_export]
-macro_rules! call {
-    ($i:expr, $fun:expr) => (
-        $fun($i)
-    );
+impl<'a> Source<'a> {
+    pub fn new(src: &'a str, pos: usize) -> Source<'a> {
+        Source { src: src, pos: pos }
+    }
 
-    ($i:expr, $fun:expr, $($args:expr),*) => (
-        $fun($i, $($args),*)
-    );
+    pub fn fw(mut self, len: usize) -> Source<'a> {
+        self.src = &self.src[len..];
+        self.pos = self.pos + len;
+        self
+    }
 }
 
-#[macro_export]
-macro_rules! alt {
-    ($i:expr, $($rest:tt)*) => (
-        alt_parser!($i, $($rest)*);
-    );
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Match<T> {
+    pub val: T,
+    pub pos: usize,
 }
 
-#[macro_export]
-macro_rules! alt_parser {
-    ($i:expr, $pattern:ident | $($rest:tt)*) => (
-        alt_parser!($i, call!($pattern) | $($rest)*);
-    );
-
-    ($i:expr, $pattern:ident) => (
-        alt_parser!($i, call!($pattern));
-    );
-
-    ($i:expr, $pattern:ident!( $($args:tt)* ) | $($rest:tt)*) => ({
-        let result = $pattern!($i, $($args)*);
-        match result {
-            Some(_) => result,
-            None => alt_parser!($i, $($rest)*)
-        }
-    });
-
-    ($i:expr, $pattern:ident!( $($args:tt)* )) => (
-        $pattern!($i, $($args)*)
-    );
-}
-
-#[macro_export]
-macro_rules! preceded_by {
-    ($i:expr, $pattern:ident!($($args:tt)*) + $pattern2:ident!($($args2:tt)*)) => (
-        match $pattern!($i, $($args)*) {
-            Some(out) => match $pattern2!($crate::Input::new(out.pos, out.src), $($args2)*) {
-                Some(out2) => Some($crate::Output::new(out2.pos, out2.src, out2.hit)),
-                None => None
-            },
-            None => None
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! followed_by {
-    ($i:expr, $pattern:ident!($($args:tt)*) + $pattern2:ident!($($args2:tt)*)) => (
-        match $pattern!($i, $($args)*) {
-            Some(out) => match $pattern2!($crate::Input::new(out.pos, out.src), $($args2)*) {
-                Some(out2) => Some($crate::Output::new(out2.pos, out2.src, out.hit)),
-                None => None
-            },
-            None => None
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! opt {
-    ($i:expr, $pattern:ident!($($args:tt)*)) => (
-        match $pattern!($i, $($args)*) {
-            Some(out) => Some($crate::Output::new(out.pos, out.src, Some(out.hit))),
-            None => Some($crate::Output::new($i.pos, $i.src, None))
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! many0 {
-    ($i:expr, $pattern:ident!($($args:tt)*)) => ({
-        let mut result = Vec::new();
-        let mut i = $i;
-
-        while let Some(out) = $pattern!(i, $($args)*) {
-            i = $crate::Input::new(out.pos, out.src);
-            result.push(out.hit)
-        }
-
-        Some($crate::Output::new(i.pos, i.src, result))
-    });
-}
-
-#[macro_export]
-macro_rules! many1 {
-    ($i:expr, $pattern:ident!($($args:tt)*)) => (
-        match many0!($i, $pattern!($($args)*)) {
-            Some(ref out) if out.hit.len() > 0 => Some(out),
-            _ => None
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! to_string {
-    ($i:expr, $pattern:ident!($($args:tt)*)) => (
-        match $pattern!($i, $($args)*) {
-            Some(out) => Some($crate::Output::new(out.pos, out.src, String::from(out.hit))),
-            None => None
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! function {
-    ($name:ident -> $out:ty, $pattern:ident!($($args:tt)*)) => (
-        fn $name(i: $crate::Input) -> Option<$crate::Output<$out>> {
-            $pattern!(i, $($args)*)
-        }
-    );
-
-    (pub $name:ident -> $out:ty, $pattern:ident!($($args:tt)*)) => (
-        pub fn $name(i: $crate::Input) -> Option<$crate::Output<$out>> {
-            $pattern!(i, $($args)*)
-        }
-    );
-}
-
-#[macro_export]
-macro_rules! value {
-    ($i:expr, $pattern:ident!($($args:tt)*) => $value:expr) => (
-        match $pattern!($i, $($args)*) {
-            Some(out) => Some($crate::Output::new(out.pos, out.src, $value)),
-            None => None
-        }
-    );
+impl<T> Match<T> {
+    pub fn new(val: T, pos: usize) -> Match<T> {
+        Match { val: val, pos: pos }
+    }
 }
