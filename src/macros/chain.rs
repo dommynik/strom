@@ -45,7 +45,7 @@ macro_rules! chain_parser {
     );
 
     ($src:expr, $start:expr, $field:ident : $pat:path; $assemble:expr) => (
-      chain_parser!($src, $start, $field: call!($pat), $assemble);
+      chain_parser!($src, $start, $field: call!($pat); $assemble);
     );
 
     ($src:expr, $start:expr, $field:ident : $pat:ident!($($args:tt)*); $assemble:expr) => (
