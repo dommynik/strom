@@ -23,6 +23,6 @@ macro_rules! followed_by {
     );
 
     ($src:expr, $pat:path, $pat2:path) => (
-        followed_by!($src, call!($pat1), call!($pat2))
+        followed_by!($src, call!($pat), call!($pat2))
     );
 }
