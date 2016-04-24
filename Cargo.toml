@@ -2,5 +2,7 @@
 name = "strom"
 version = "0.1.0"
 authors = ["dommynik <mail@dommynik.de>"]
-
-[dependencies]
+description = "A str-oriented, nom inspired zero-copy parser combinators library"
+license = "MIT"
+repository = "https://github.com/dommynik/strom"
+keywords = ["parser", "parser-combinators"]
